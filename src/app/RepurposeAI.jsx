@@ -515,6 +515,8 @@ export default function RepurposeAI() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [activeTab, setActiveTab] = useState(null);
   const [copied, setCopied] = useState({});
+  const [isFetchingTranscript, setIsFetchingTranscript] = useState(false);
+  const [transcriptError, setTranscriptError] = useState("");
 
   const callClaude = async (type, transcriptText) => {
     const systemPrompt = `You are an expert content repurposing strategist who transforms video transcripts into platform-native content. You write in an engaging, high-value style optimised for each platform's algorithm and audience. Be specific, actionable, and creative.`;
@@ -566,12 +568,40 @@ export default function RepurposeAI() {
     setTimeout(() => setCopied((prev) => ({ ...prev, [id]: false })), 2000);
   };
 
-  const handleUrlChange = (e) => {
+  const handleUrlChange = async (e) => {
     const val = e.target.value;
     setUrl(val);
+    setTranscriptError("");
     const valid = validateUrl(val);
     setUrlValid(valid);
-    if (valid) setShowTranscript(true);
+    if (!valid) {
+      setShowTranscript(false);
+      return;
+    }
+
+    setShowTranscript(true);
+    setIsFetchingTranscript(true);
+    setTranscript("");
+
+    try {
+      const res = await fetch("/api/transcript", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: val }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.transcript) {
+        throw new Error(data.error || "Failed to fetch transcript");
+      }
+      setTranscript(data.transcript);
+    } catch (err) {
+      setTranscript("");
+      setTranscriptError(
+        "Auto transcript failed. Paste your script or transcript manually."
+      );
+    } finally {
+      setIsFetchingTranscript(false);
+    }
   };
 
   return (
@@ -614,6 +644,14 @@ export default function RepurposeAI() {
               description to expand it → click &quot;Show transcript&quot; on the
               right side of the video.
             </p>
+            {isFetchingTranscript && (
+              <p className="hint">
+                Fetching transcript from YouTube via Gemini…
+              </p>
+            )}
+            {transcriptError && (
+              <p className="hint error">{transcriptError}</p>
+            )}
             <textarea
               placeholder="Paste your transcript here..."
               value={transcript}
